@@ -43,7 +43,7 @@ public class Interceptor {
     public String beforeSend(String plainText) {
         try {
            System.out.println("[Interceptor] Encrypting message: " + plainText);
-			return processAES(plainText, aesKey, true);//chiffrer
+			return processAESGCM(plainText, aesKey, true);//chiffrer
         } catch (Exception e) {
             throw new RuntimeException("Encryption failed", e);
         }
@@ -52,7 +52,7 @@ public class Interceptor {
     public String afterReceive(String encryptedText) {
         try {
             System.out.println("[Interceptor] Decrypting message...");
-			return processAES(encryptedText, aesKey, false);//dechiffrer
+			return processAESGCM(encryptedText, aesKey, false);//dechiffrer
         } catch (Exception e) {
             return "[Decryption failed: " + e.getMessage() + "]";
         }
@@ -66,60 +66,41 @@ public class Interceptor {
      * @param text The text to encode/decode
      * @return The ROT13 transformed text
      */
-    private String rot13(String text) {
-        StringBuilder result = new StringBuilder();
-        for (char c : text.toCharArray()) {
-            if (c >= 'a' && c <= 'z') {
-                result.append((char) ((c - 'a' + 13) % 26 + 'a'));
-            } else if (c >= 'A' && c <= 'Z') {
-                result.append((char) ((c - 'A' + 13) % 26 + 'A'));
-            } else {
-                result.append(c);
-            }
-        }
-        return result.toString();
-    }
-    private String processAES(String input, SecretKey key, boolean encrypt) {
+    private String processAESGCM(String input, SecretKey key, boolean encrypt) {
         try {
-            Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding");
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            byte[] iv = new byte[12]; // 96 bits, recommandé pour GCM
+            SecureRandom random = new SecureRandom();
+            random.nextBytes(iv);
+            GCMParameterSpec spec = new GCMParameterSpec(128, iv); // tag 128 bits
+
+            byte[] result;
 
             if (encrypt) {
-                // Générer IV aléatoire
-                byte[] iv = new byte[16];
-                SecureRandom random = new SecureRandom();
-                random.nextBytes(iv);
-                IvParameterSpec ivSpec = new IvParameterSpec(iv);
-
-                cipher.init(Cipher.ENCRYPT_MODE, key, ivSpec);
-
+                cipher.init(Cipher.ENCRYPT_MODE, key, spec);
                 byte[] cipherText = cipher.doFinal(input.getBytes("UTF-8"));
 
-                // Concaténer IV + ciphertext
-                byte[] combined = new byte[iv.length + cipherText.length];
-                System.arraycopy(iv, 0, combined, 0, iv.length);
-                System.arraycopy(cipherText, 0, combined, iv.length, cipherText.length);
-
-                return Base64.getEncoder().encodeToString(combined);
+                // Concaténation IV + ciphertext + tag
+                result = new byte[iv.length + cipherText.length];
+                System.arraycopy(iv, 0, result, 0, iv.length);
+                System.arraycopy(cipherText, 0, result, iv.length, cipherText.length);
 
             } else {
                 byte[] combined = Base64.getDecoder().decode(input);
+                byte[] ivExtracted = Arrays.copyOfRange(combined, 0, 12);
+                byte[] cipherText = Arrays.copyOfRange(combined, 12, combined.length);
 
-                // Extraire IV
-                byte[] iv = Arrays.copyOfRange(combined, 0, 16);
-                byte[] cipherText = Arrays.copyOfRange(combined, 16, combined.length);
-
-                IvParameterSpec ivSpec = new IvParameterSpec(iv);
-                cipher.init(Cipher.DECRYPT_MODE, key, ivSpec);
-
-                byte[] plainText = cipher.doFinal(cipherText);
-
-                return new String(plainText, "UTF-8");
+                GCMParameterSpec specDec = new GCMParameterSpec(128, ivExtracted);
+                cipher.init(Cipher.DECRYPT_MODE, key, specDec);
+                result = cipher.doFinal(cipherText); // exception si modifié
             }
 
+            return Base64.getEncoder().encodeToString(result);
+
         } catch (Exception e) {
-            throw new RuntimeException("AES processing failed", e);
+            throw new RuntimeException("AES-GCM processing failed: " + e.getMessage(), e);
         }
     }
-
 }
+
 

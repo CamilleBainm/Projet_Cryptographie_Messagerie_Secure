@@ -7,9 +7,9 @@ public class ServerInterceptor {
 
     public String onMessageRelay(String message, int fromClient, int toClient) {
 
-        byte[] data = Base64.getDecoder().decode(message);
-        data[16] ^= 1; // flip un bit du ciphertext
-        return Base64.getEncoder().encodeToString(data);
+    byte[] data = Base64.getDecoder().decode(message);
+    data[16] ^= 1; // flip bit
+    return Base64.getEncoder().encodeToString(data);
 
     }
 

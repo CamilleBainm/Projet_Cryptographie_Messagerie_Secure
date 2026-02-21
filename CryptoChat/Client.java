@@ -13,14 +13,26 @@ public class Client {
     private Interceptor interceptor;
     private volatile boolean running;
 
-    public Client() {
-        this.interceptor = new Interceptor();
+    //Adapter le constructeur pour accepter un mot de passe et initialiser l'interceptor avec ce mot de passe
+    public Client(String password) {
+        try {
+            this.interceptor = new Interceptor(password);
+        } catch (Exception e) {
+            System.err.println("Failed to initialize Interceptor: " + e.getMessage());
+            e.printStackTrace();
+            System.exit(1);
+        }
         this.running = true;
     }
-
     public static void main(String[] args) {
+        //Mot de passe en argument pour le chiffrement 
+        if (args.length < 1) {
+            System.err.println("Usage: java Client <password>");
+            System.exit(1);
+        }
+        String password = args[0];
         System.out.println("Starting client ...");
-        Client client = new Client();
+        Client client = new Client(password);
         client.start();
     }
 

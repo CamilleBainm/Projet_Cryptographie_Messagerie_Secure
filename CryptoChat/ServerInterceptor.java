@@ -1,3 +1,4 @@
+import java.util.Base64;
 
 public class ServerInterceptor {
     public ServerInterceptor() {
@@ -6,11 +7,10 @@ public class ServerInterceptor {
 
     public String onMessageRelay(String message, int fromClient, int toClient) {
 
-        // Décryptage ROT13 pour affichage clair (MITM)
-        String decrypted = rot13(message);
-        // Honest relay - no modification
-		System.out.println("Relaying from " + fromClient + " to client " + toClient + " : " + "Message chiffré " + message + " | Message déchiffré: " + decrypted);
-        return message;
+        byte[] data = Base64.getDecoder().decode(message);
+        data[16] ^= 1; // flip un bit du ciphertext
+        return Base64.getEncoder().encodeToString(data);
+
     }
 
     // ROT13 pour MITM

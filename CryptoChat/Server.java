@@ -31,7 +31,7 @@ public class Server {
 
     // Server-side interceptor for MITM attack simulation
     // Students can implement various attacks here to test their protocol's security
-    private static ServerInterceptor serverInterceptor = new ServerInterceptor();
+    public static ServerInterceptor serverInterceptor = new ServerInterceptor();
 
     /**
      * Main entry point for the server application
@@ -105,11 +105,7 @@ public class Server {
                     // - Return the message unchanged (honest relay)
                     // - Return a modified message (active attack)
                     // - Return null to drop the message (selective forwarding)
-                    String interceptedMessage = serverInterceptor.onMessageRelay(
-                        message,
-                        sender.getClientId(),
-                        client.getClientId()
-                    );
+                    String interceptedMessage = serverInterceptor.onMessageRelay(message, sender.getClientId(), client.getClientId());
 
                     // Only send the message if the interceptor didn't drop it
                     if (interceptedMessage != null) {
@@ -187,24 +183,28 @@ class ClientHandler extends Thread {
     @Override
     public void run() {
         try {
+            // --- HANDSHAKE MITM ---
+            // Lire la clé publique envoyée par le client
+            String clientPublicB64 = input.readLine();
+            String mitmPublicB64 = Server.serverInterceptor.performHandshake(clientPublicB64, clientId);
+            
+            // Envoyer la clé publique MITM au client
+            output.println(mitmPublicB64);
+            System.out.println("[Server] Completed MITM handshake with Client " + clientId);
+
+            // --- PHASE MESSAGERIE ---
             String message;
-
-            // Continuously read messages until client disconnects or error occurs
             while (running && (message = input.readLine()) != null) {
-
-                // Log the received message (this is the encrypted/modified message)
                 System.out.println("[Client " + clientId + " -> Server]: " + message);
-
-                // Broadcast this message to all other connected clients
-                // Note: The message is transmitted as-is. Students will implement
-                // encryption on the sending side and decryption on the receiving side
                 Server.broadcastMessage(message, this);
             }
 
         } catch (IOException e) {
             System.err.println("Error reading from client " + clientId + ": " + e.getMessage());
+        } catch (Exception e) {
+            System.err.println("Handshake error with client " + clientId + ": " + e.getMessage());
+            e.printStackTrace();
         } finally {
-            // Clean up when client disconnects
             cleanup();
         }
     }

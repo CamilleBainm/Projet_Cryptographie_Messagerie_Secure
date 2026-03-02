@@ -183,6 +183,7 @@ class ClientHandler extends Thread {
     @Override
     public void run() {
         try {
+            /* 
             // --- HANDSHAKE MITM ---
             // Lire la clé publique envoyée par le client
             String clientPublicB64 = input.readLine();
@@ -191,19 +192,19 @@ class ClientHandler extends Thread {
             // Envoyer la clé publique MITM au client
             output.println(mitmPublicB64);
             System.out.println("[Server] Completed MITM handshake with Client " + clientId);
-
+            */
             // --- PHASE MESSAGERIE ---
             String message;
             while (running && (message = input.readLine()) != null) {
                 System.out.println("[Client " + clientId + " -> Server]: " + message);
                 Server.broadcastMessage(message, this);
             }
-
+            
         } catch (IOException e) {
             System.err.println("Error reading from client " + clientId + ": " + e.getMessage());
-        } catch (Exception e) {
+        /*} catch (Exception e) {
             System.err.println("Handshake error with client " + clientId + ": " + e.getMessage());
-            e.printStackTrace();
+            e.printStackTrace();*/
         } finally {
             cleanup();
         }

@@ -1,5 +1,9 @@
 import java.io.*;
 import java.net.*;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 import java.util.Scanner;
 
 
@@ -13,15 +17,46 @@ public class Client {
     private Interceptor interceptor;
     private volatile boolean running;
 
-    //Adapter le constructeur pour l'etablissement d'une clé de session ECDH
-    public Client() {
-        this.interceptor = new Interceptor();
+    private PublicKey otherClientLongTermPublicKey;
+
+    public Client(String privateKeyPath, String publicKeyPath, PublicKey otherClientPublicKey) {
+        this.interceptor = new Interceptor(privateKeyPath, publicKeyPath);
+        this.otherClientLongTermPublicKey = otherClientPublicKey;
         this.running = true;
     }
-
+    
+    private static PublicKey loadPublicKeyFromPEM(String path) throws Exception {
+        String publicPem = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)));
+        publicPem = publicPem
+                .replace("-----BEGIN PUBLIC KEY-----", "")
+                .replace("-----END PUBLIC KEY-----", "")
+                .replaceAll("\\s", "");
+        byte[] publicBytes = Base64.getDecoder().decode(publicPem);
+        KeyFactory kf = KeyFactory.getInstance("EC");
+        X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(publicBytes);
+        return kf.generatePublic(pubSpec);
+    }
     public static void main(String[] args) {
-        Client client = new Client();
-        client.start();
+        if (args.length != 3) {
+            System.out.println("Usage: java Client <privateKey.pem> <publicKey.pem> <otherClientPublic.pem>");
+            return;
+        }
+
+        String privateKeyPath = args[0];
+        String publicKeyPath = args[1];
+        String otherClientPublicPath = args[2];
+
+        try {
+            // Charger la clé publique longue durée du pair
+            PublicKey otherClientPublicKey = loadPublicKeyFromPEM(otherClientPublicPath);
+
+            // Créer l’instance du client
+            Client client = new Client(privateKeyPath, publicKeyPath, otherClientPublicKey);
+            client.start(); // c’est ici que tout se passe, pas avant
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     //This method is called when the client starts. It handles the connection to the server,
@@ -45,7 +80,7 @@ public class Client {
             System.out.println("Both clients connected!\n");
 
             System.out.println("--- Handshake Phase ---");
-            interceptor.onHandshake(input, output);
+            interceptor.onHandshake(input, output, otherClientLongTermPublicKey);
             System.out.println("--- Handshake Complete ---\n");
 
             System.out.println("Chat session started!");

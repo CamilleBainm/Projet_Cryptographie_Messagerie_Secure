@@ -14,46 +14,106 @@ public class Interceptor {
     
     private SecretKey aesKey;
 
+    private PrivateKey longTermPrivateKey;
+    private PublicKey longTermPublicKey;
 
-    public Interceptor() {
-        
+    public Interceptor(String privateKeyPath, String publicKeyPath) {
+        try {
+            loadLongTermKeys(privateKeyPath, publicKeyPath);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load ECDSA keys", e);
+        }
     }
 
-    public void onHandshake(BufferedReader input, PrintWriter output) throws IOException {
+    private void loadLongTermKeys(String privatePath, String publicPath) throws Exception {
+
+        KeyFactory kf = KeyFactory.getInstance("EC");
+
+        // ----- Charger clé privée -----
+        String privatePem = new String(java.nio.file.Files.readAllBytes(
+                java.nio.file.Paths.get(privatePath)));
+
+        privatePem = privatePem
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
+                .replaceAll("\\s", "");
+
+        byte[] privateBytes = Base64.getDecoder().decode(privatePem);
+
+        PKCS8EncodedKeySpec privSpec = new PKCS8EncodedKeySpec(privateBytes);
+        longTermPrivateKey = kf.generatePrivate(privSpec);
+
+
+        // ----- Charger clé publique -----
+        String publicPem = new String(java.nio.file.Files.readAllBytes(
+                java.nio.file.Paths.get(publicPath)));
+
+        publicPem = publicPem
+                .replace("-----BEGIN PUBLIC KEY-----", "")
+                .replace("-----END PUBLIC KEY-----", "")
+                .replaceAll("\\s", "");
+
+        byte[] publicBytes = Base64.getDecoder().decode(publicPem);
+
+        X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(publicBytes);
+        longTermPublicKey = kf.generatePublic(pubSpec);
+
+        System.out.println("[Interceptor] Long-term ECDSA keys loaded");
+    }
+
+    public void onHandshake(BufferedReader input, PrintWriter output, PublicKey otherLongTermPublicKey) throws IOException {
         try {
             System.out.println("[Interceptor] Starting ECDH handshake");
-
-            //Génération paire ECDH éphémère
+            // Génération paire ECDH éphémère
             KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
             ECGenParameterSpec ecSpec = new ECGenParameterSpec("secp256r1"); // courbe recommandée 256 bits
             kpg.initialize(ecSpec);
 
             KeyPair keyPair = kpg.generateKeyPair();
 
-            //Envoi clé publique encodée Base64
-            String myPublicKeyB64 = Base64.getEncoder()
-                    .encodeToString(keyPair.getPublic().getEncoded());
+            // --- SIGNATURE DE LA CLE ECDH ---
+            Signature ecdsaSign = Signature.getInstance("SHA256withECDSA");
+            ecdsaSign.initSign(longTermPrivateKey); // clé ECDSA long terme
+            ecdsaSign.update(keyPair.getPublic().getEncoded());
+            byte[] signatureBytes = ecdsaSign.sign();
+
+            // Encode Base64
+            String myPublicKeyB64 = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+            String signatureB64 = Base64.getEncoder().encodeToString(signatureBytes);
+
+            // Envoi : clé publique + signature
             output.println(myPublicKeyB64);
+            output.println(signatureB64);
 
-            //Réception clé publique distante
+            // Lecture clé publique distante
             String otherPublicKeyB64 = input.readLine();
+            String otherSignatureB64 = input.readLine(); // nouveau nom pour éviter conflit
             byte[] otherKeyBytes = Base64.getDecoder().decode(otherPublicKeyB64);
+            byte[] otherSignatureBytes = Base64.getDecoder().decode(otherSignatureB64);
 
+            // Création objet PublicKey ECDH
             KeyFactory kf = KeyFactory.getInstance("EC");
             X509EncodedKeySpec keySpec = new X509EncodedKeySpec(otherKeyBytes);
             PublicKey otherPublicKey = kf.generatePublic(keySpec);
 
-            System.out.println("Received key length (Base64): " + otherPublicKeyB64.length());
-            System.out.println("Received key: " + otherPublicKeyB64);
+            // --- Vérification de la signature ECDSA ---
+            Signature ecdsaVerify = Signature.getInstance("SHA256withECDSA");
+            ecdsaVerify.initVerify(otherLongTermPublicKey); // <-- utilise la clé publique longue durée passée en paramètre
+            ecdsaVerify.update(otherPublicKey.getEncoded());
 
+            if (!ecdsaVerify.verify(otherSignatureBytes)) {
+                throw new SecurityException("[Interceptor] Signature ECDSA invalide ! Handshake interrompu");
+            } else {
+                System.out.println("[Interceptor] Signature ECDSA de la clé ECDH vérifiée");
+            }
 
-            //Calcul secret partagé
+            // Calcul secret partagé
             KeyAgreement ka = KeyAgreement.getInstance("ECDH");
             ka.init(keyPair.getPrivate());
             ka.doPhase(otherPublicKey, true);
             byte[] sharedSecret = ka.generateSecret();
 
-            //Dérivation clé AES-128 via SHA-256
+            // Dérivation clé AES-128 via SHA-256
             MessageDigest sha = MessageDigest.getInstance("SHA-256");
             byte[] derivedKey = sha.digest(sharedSecret);
 
@@ -133,5 +193,3 @@ public class Interceptor {
     }
 
 }
-
-

@@ -20,6 +20,9 @@ public class Interceptor {
     private X509Certificate clientCertificate;
     private X509Certificate caCertificate;
 
+    private int sendCounter;
+    private int receiveCounter = 0;
+
     public Interceptor(String privateKeyPath, String clientCertPath, String caCertPath) {
         try {
             loadPrivateKey(privateKeyPath);
@@ -160,11 +163,19 @@ public class Interceptor {
         }
     }
 
+    public void initCounters() {
+        sendCounter = 0;
+        receiveCounter = -1;
+        System.out.println("[Interceptor] Session counters initialized: send=" 
+                        + sendCounter + " receive=" + receiveCounter);
+    }
 
     public String beforeSend(String plainText) {
         try {
-           System.out.println("[Interceptor] Encrypting message: " + plainText);
-			return processAESGCM(plainText, aesKey, true);//chiffrer
+            // Ajout du compteur de séquence au message
+            String messageWithCounter = sendCounter + ":" + plainText;
+            sendCounter++;
+            return processAESGCM(messageWithCounter, aesKey, true);
         } catch (Exception e) {
             throw new RuntimeException("Encryption failed", e);
         }
@@ -172,8 +183,17 @@ public class Interceptor {
 
     public String afterReceive(String encryptedText) {
         try {
-            System.out.println("[Interceptor] Decrypting message...");
-			return processAESGCM(encryptedText, aesKey, false);//dechiffrer
+            String decrypted = processAESGCM(encryptedText, aesKey, false);
+            String[] parts = decrypted.split(":", 2);
+            int counter = Integer.parseInt(parts[0]);
+            String message = parts[1];
+
+            // Vérification du numéro de séquence
+            if (counter <= receiveCounter) {
+                return "[Replay detected! Message discarded]";
+            }
+            receiveCounter = counter;
+            return message;
         } catch (Exception e) {
             return "[Decryption failed: " + e.getMessage() + "]";
         }

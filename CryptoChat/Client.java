@@ -76,6 +76,10 @@ public class Client {
 
             System.out.println("--- Handshake Phase ---");
             interceptor.onHandshake(input, output);
+            // Initialisation locale des compteurs pour éviter les rejets
+            interceptor.initCounters();
+
+
             System.out.println("--- Handshake Complete ---\n");
 
             System.out.println("Chat session started!");

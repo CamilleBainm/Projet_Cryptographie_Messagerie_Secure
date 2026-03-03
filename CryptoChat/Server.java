@@ -183,15 +183,23 @@ class ClientHandler extends Thread {
     @Override
     public void run() {
         try {
+
+            //Decommenter cette section pour activer le MITM lors du handshake
+            
             /* 
             // --- HANDSHAKE MITM ---
-            // Lire la clé publique envoyée par le client
-            String clientPublicB64 = input.readLine();
-            String mitmPublicB64 = Server.serverInterceptor.performHandshake(clientPublicB64, clientId);
-            
-            // Envoyer la clé publique MITM au client
-            output.println(mitmPublicB64);
-            System.out.println("[Server] Completed MITM handshake with Client " + clientId);
+            String clientCertB64 = input.readLine();   // certificat du client
+            String clientKeyB64 = input.readLine();    // clé publique ECDH du client
+            String clientSigB64 = input.readLine();    // signature de la clé ECDH
+
+            // Appel du MITM pour remplacer la clé et la signature
+            String[] mitmResponse = Server.serverInterceptor.performHandshake(clientCertB64, clientKeyB64, clientId);
+
+            // Envoi au client
+            output.println(mitmResponse[0]); // certificat peer (réel)
+            output.println(mitmResponse[1]); // clé publique MITM
+            output.println(mitmResponse[2]); // signature invalide
+            System.out.println("[Server] MITM handshake done with Client " + clientId);
             */
             // --- PHASE MESSAGERIE ---
             String message;

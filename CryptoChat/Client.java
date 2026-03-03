@@ -19,9 +19,8 @@ public class Client {
 
     private PublicKey otherClientLongTermPublicKey;
 
-    public Client(String privateKeyPath, String publicKeyPath, PublicKey otherClientPublicKey) {
-        this.interceptor = new Interceptor(privateKeyPath, publicKeyPath);
-        this.otherClientLongTermPublicKey = otherClientPublicKey;
+    public Client(String privateKeyPath, String clientCertPath, String caCertPath) {
+        this.interceptor = new Interceptor(privateKeyPath, clientCertPath, caCertPath);
         this.running = true;
     }
     
@@ -37,22 +36,18 @@ public class Client {
         return kf.generatePublic(pubSpec);
     }
     public static void main(String[] args) {
-        if (args.length != 3) {
-            System.out.println("Usage: java Client <privateKey.pem> <publicKey.pem> <otherClientPublic.pem>");
-            return;
-        }
+    if (args.length != 3) {
+        System.out.println("Usage: java Client <privateKey.pem> <clientCert.pem> <caCert.pem>");
+        return;
+    }
 
-        String privateKeyPath = args[0];
-        String publicKeyPath = args[1];
-        String otherClientPublicPath = args[2];
+    String privateKeyPath = args[0];
+    String clientCertPath = args[1];
+    String caCertPath = args[2];
 
         try {
-            // Charger la clé publique longue durée du pair
-            PublicKey otherClientPublicKey = loadPublicKeyFromPEM(otherClientPublicPath);
-
-            // Créer l’instance du client
-            Client client = new Client(privateKeyPath, publicKeyPath, otherClientPublicKey);
-            client.start(); // c’est ici que tout se passe, pas avant
+            Client client = new Client(privateKeyPath, clientCertPath, caCertPath);
+            client.start();
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -80,7 +75,7 @@ public class Client {
             System.out.println("Both clients connected!\n");
 
             System.out.println("--- Handshake Phase ---");
-            interceptor.onHandshake(input, output, otherClientLongTermPublicKey);
+            interceptor.onHandshake(input, output);
             System.out.println("--- Handshake Complete ---\n");
 
             System.out.println("Chat session started!");
